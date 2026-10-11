@@ -34,7 +34,37 @@ export async function POST(request: Request) {
     if (capture?.status !== 'COMPLETED' || capture?.amount?.currency_code !== 'EUR' || !['9.90','16.90'].includes(capture?.amount?.value)) {
       return NextResponse.json({ error: 'Payment verification failed' }, { status: 422 });
     }
-    return NextResponse.json({ status: 'COMPLETED', edition, sandbox: true, note: 'Test payment only. No digital goods are delivered.' });
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SECRET_KEY;
+    if (!supabaseUrl || !supabaseKey) return NextResponse.json({ error: 'Order storage not configured' }, { status: 503 });
+    const captureId = capture?.id;
+    if (typeof captureId !== 'string' || !captureId) return NextResponse.json({ error: 'Missing capture reference' }, { status: 422 });
+    const payerEmail = typeof result.payer?.email_address === 'string' ? result.payer.email_address : null;
+    const save = await fetch(supabaseUrl.replace(/\\/$/, '') + '/rest/v1/digital_orders?on_conflict=paypal_order_id', {
+      method: 'POST',
+      headers: {
+        apikey: supabaseKey,
+        Authorization: 'Bearer ' + supabaseKey,
+        'Content-Type': 'application/json',
+        Prefer: 'resolution=merge-duplicates,return=minimal'
+      },
+      body: JSON.stringify({
+        paypal_order_id: orderId,
+        paypal_capture_id: captureId,
+        edition,
+        amount_eur: prices[edition],
+        currency: 'EUR',
+        payment_status: 'COMPLETED',
+        payer_email: payerEmail,
+        fulfillment_status: 'PENDING'
+      }),
+      cache: 'no-store'
+    });
+    if (!save.ok) {
+      console.error('Sandbox order persistence failed', save.status);
+      return NextResponse.json({ error: 'Payment completed, but order recording needs support. Keep your PayPal order ID.', orderId }, { status: 503 });
+    }
+    return NextResponse.json({ status: 'COMPLETED', edition, sandbox: true, orderId, note: 'Test payment saved. No digital goods are delivered.' });
   } catch {
     return NextResponse.json({ error: 'Sandbox capture unavailable' }, { status: 503 });
   }
