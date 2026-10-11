@@ -61,7 +61,7 @@ export async function POST(request: Request) {
         apikey: supabaseKey,
         Authorization: 'Bearer ' + supabaseKey,
         'Content-Type': 'application/json',
-        Prefer: 'resolution=merge-duplicates,return=minimal'
+        Prefer: 'resolution=ignore-duplicates,return=representation'
       },
       body: JSON.stringify({
         paypal_order_id: orderId,
@@ -80,6 +80,10 @@ export async function POST(request: Request) {
     if (!save.ok) {
       console.error('Sandbox order persistence failed', save.status);
       return NextResponse.json({ error: 'Payment completed, but order recording needs support. Keep your PayPal order ID.', orderId }, { status: 503 });
+    }
+    const savedRows = await save.json();
+    if (!Array.isArray(savedRows) || savedRows.length !== 1) {
+      return NextResponse.json({ error: 'This order was already recorded. Use the recovery page to retrieve your downloads.', orderId }, { status: 409 });
     }
     return NextResponse.json({ status: 'COMPLETED', edition, sandbox: true, orderId, claimToken, note: 'Sandbox test payment saved. Private PDF test downloads are available for one hour.' });
   } catch {
