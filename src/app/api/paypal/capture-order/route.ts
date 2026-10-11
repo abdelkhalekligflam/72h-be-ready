@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { createHash, randomBytes } from 'node:crypto';
 
 export const runtime = 'nodejs';
 export async function POST(request: Request) {
@@ -47,6 +48,8 @@ export async function POST(request: Request) {
     const captureId = capture?.id;
     if (typeof captureId !== 'string' || !captureId) return NextResponse.json({ error: 'Missing capture reference' }, { status: 422 });
     const payerEmail = typeof result.payer?.email_address === 'string' ? result.payer.email_address : null;
+    const claimToken = randomBytes(32).toString('hex');
+    const claimHash = createHash('sha256').update(claimToken).digest('hex');
     const save = await fetch(supabaseUrl.replace(/\/$/, '') + '/rest/v1/digital_orders?on_conflict=paypal_order_id', {
       method: 'POST',
       headers: {
@@ -63,7 +66,9 @@ export async function POST(request: Request) {
         currency: 'EUR',
         payment_status: 'COMPLETED',
         payer_email: payerEmail,
-        fulfillment_status: 'PENDING'
+        fulfillment_status: 'PENDING',
+        download_token_hash: claimHash,
+        download_token_expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString()
       }),
       cache: 'no-store'
     });
@@ -71,7 +76,7 @@ export async function POST(request: Request) {
       console.error('Sandbox order persistence failed', save.status);
       return NextResponse.json({ error: 'Payment completed, but order recording needs support. Keep your PayPal order ID.', orderId }, { status: 503 });
     }
-    return NextResponse.json({ status: 'COMPLETED', edition, sandbox: true, orderId, note: 'Test payment saved. No digital goods are delivered.' });
+    return NextResponse.json({ status: 'COMPLETED', edition, sandbox: true, orderId, claimToken, note: 'Test payment saved. No digital goods are delivered.' });
   } catch {
     return NextResponse.json({ error: 'Sandbox capture unavailable' }, { status: 503 });
   }
