@@ -1,0 +1,46 @@
+import { createHash, randomBytes } from 'node:crypto';
+import { NextResponse } from 'next/server';
+
+export const runtime = 'nodejs';
+export async function POST(request: Request) {
+  if (process.env.PAYPAL_ENV !== 'sandbox') return NextResponse.json({ error: 'Recovery is in test mode only' }, { status: 403 });
+  const base = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SECRET_KEY;
+  const mailKey = process.env.RESEND_API_KEY;
+  const from = process.env.RECOVERY_FROM_EMAIL;
+  const site = process.env.RECOVERY_BASE_URL;
+  if (!base || !key || !mailKey || !from || !site) return NextResponse.json({ error: 'Email recovery is not configured yet' }, { status: 503 });
+  let siteUrl: URL;
+  try { siteUrl = new URL(site); if (siteUrl.protocol !== 'https:' || siteUrl.username || siteUrl.password) throw new Error('invalid'); }
+  catch { return NextResponse.json({ error: 'Recovery URL configuration invalid' }, { status: 503 }); }
+  const body = await request.json().catch(() => null);
+  const orderId = body?.orderId;
+  const email = body?.email;
+  if (typeof orderId !== 'string' || !/^[A-Z0-9]{8,32}$/.test(orderId) ||
+      typeof email !== 'string' || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return NextResponse.json({ error: 'Invalid order details' }, { status: 400 });
+  const generic = NextResponse.json({ message: 'If the order and email match, a recovery link will be sent.' }, { headers: { 'Cache-Control': 'no-store' } });
+  const headers = { apikey: key, Authorization: 'Bearer ' + key };
+  const params = new URLSearchParams({ paypal_order_id: 'eq.' + orderId, payer_email: 'eq.' + email, select: 'id,payment_status,recovery_requested_at,fulfillment_status', limit: '1' });
+  const found = await fetch(base.replace(/\/$/, '') + '/rest/v1/digital_orders?' + params, { headers, cache: 'no-store' });
+  if (!found.ok) return NextResponse.json({ error: 'Recovery service temporarily unavailable' }, { status: 503 });
+  const rows = await found.json();
+  const order = rows?.[0];
+  if (!order || order.payment_status !== 'COMPLETED' || order.fulfillment_status === 'REVOKED') return generic;
+  if (order.recovery_requested_at && Date.now() - Date.parse(order.recovery_requested_at) < 15 * 60 * 1000) return generic;
+  const token = randomBytes(32).toString('hex');
+  const hash = createHash('sha256').update(token).digest('hex');
+  const now = new Date().toISOString();
+  const update = await fetch(base.replace(/\/$/, '') + '/rest/v1/digital_orders?id=eq.' + encodeURIComponent(order.id), {
+    method: 'PATCH', headers: { ...headers, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+    body: JSON.stringify({ download_token_hash: hash, download_token_expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(), recovery_requested_at: now }), cache: 'no-store'
+  });
+  if (!update.ok) return NextResponse.json({ error: 'Recovery service temporarily unavailable' }, { status: 503 });
+  const link = new URL('/recover', siteUrl.origin);
+  link.hash = 'token=' + token;
+  const sent = await fetch('https://api.resend.com/emails', {
+    method: 'POST', headers: { Authorization: 'Bearer ' + mailKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from, to: [email], subject: '72H — BE READY | Your secure download link', text: 'Use this link within one hour to retrieve your purchased PDFs:\n' + link.toString() + '\nIf you did not request this, ignore this email.' }), cache: 'no-store'
+  });
+  if (!sent.ok) { console.error('Recovery email failed', sent.status); return NextResponse.json({ error: 'Email delivery unavailable. Try again later or contact support.' }, { status: 503 }); }
+  return generic;
+}
