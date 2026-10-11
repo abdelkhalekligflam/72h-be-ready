@@ -2,6 +2,11 @@ import { createHash, randomBytes } from 'node:crypto';
 import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
+export async function GET() {
+  const configured = process.env.PAYPAL_ENV === 'sandbox' && Boolean(process.env.RESEND_API_KEY && process.env.RECOVERY_FROM_EMAIL && process.env.RECOVERY_BASE_URL && process.env.SUPABASE_URL && process.env.SUPABASE_SECRET_KEY);
+  return NextResponse.json({ available: configured }, { headers: { 'Cache-Control': 'no-store' } });
+}
+
 export async function POST(request: Request) {
   if (process.env.PAYPAL_ENV !== 'sandbox') return NextResponse.json({ error: 'Recovery is in test mode only' }, { status: 403 });
   const base = process.env.SUPABASE_URL;
