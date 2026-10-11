@@ -14,6 +14,9 @@ declare global { interface Window { paypal?: PayPalSDK } }
 export default function SandboxCheckout({ edition, language, onClose }: { edition: Edition; language: 'en' | 'fr'; onClose: () => void }) {
   const container = useRef<HTMLDivElement>(null);
   const [message, setMessage] = useState('');
+  const [claimToken, setClaimToken] = useState('');
+  const [downloadError, setDownloadError] = useState('');
+  const [downloading, setDownloading] = useState('');
   const [receipt, setReceipt] = useState<{ edition: string; files: string[]; downloadsEnabled: boolean } | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
 
@@ -41,6 +44,7 @@ export default function SandboxCheckout({ edition, language, onClose }: { editio
             });
             const result = await response.json();
             if (response.ok && result.status === 'COMPLETED' && result.claimToken) {
+              if (active) setClaimToken(result.claimToken);
               const receiptResponse = await fetch('/api/orders/receipt', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: result.claimToken }) });
               if (receiptResponse.ok && active) setReceipt(await receiptResponse.json());
             }
@@ -74,13 +78,30 @@ export default function SandboxCheckout({ edition, language, onClose }: { editio
     };
   }, [edition, language]);
 
+  const download = async (file: string) => {
+    setDownloadError('');
+    setDownloading(file);
+    try {
+      const response = await fetch('/api/orders/download', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: claimToken, file })
+      });
+      const result = await response.json();
+      if (!response.ok || !result.url) throw new Error(result.error || 'Download unavailable');
+      window.open(result.url, '_blank', 'noopener,noreferrer');
+    } catch (error) {
+      setDownloadError(error instanceof Error ? error.message : 'Download failed');
+    } finally { setDownloading(''); }
+  };
+  const fileKeys = receipt?.edition === 'bundle' ? ['handbook_en','workbook_en','handbook_fr','workbook_fr'] : receipt?.edition === 'en' ? ['handbook_en','workbook_en'] : ['handbook_fr','workbook_fr'];
+  const fileLabels: Record<string,string> = { handbook_en: 'English handbook', workbook_en: 'English workbook', handbook_fr: 'French handbook', workbook_fr: 'French workbook' };
   return <section style={{ maxWidth: 580, margin: '30px auto', padding: 26, border: '1px solid #565656', borderRadius: 16 }} aria-label="PayPal Sandbox checkout">
     <p style={{ fontWeight: 700, marginBottom: 12 }}>PAYPAL SANDBOX · {edition.toUpperCase()}</p>
     <p style={{ marginBottom: 18 }}>{language === 'en' ? 'TEST MODE ONLY — No real charges. Free workbook included with the final edition, not delivered in tests.' : 'MODE TEST UNIQUEMENT — Aucun débit réel. Carnet bonus inclus dans la future édition, non livré pendant les tests.'}</p>
     {status === 'loading' && <p>Loading PayPal Sandbox…</p>}
     <div ref={container} />
     {message && <p role="status" style={{ marginTop: 14 }}>{message}</p>}
-    {receipt && <div style={{ marginTop: 16, padding: 16, border: '1px solid #565656', borderRadius: 10 }}><strong>{language === 'en' ? 'Test order receipt' : 'Reçu de commande test'}</strong><p>{receipt.files.join(' · ')}</p><p>{language === 'en' ? 'Downloads are disabled until final PDF review.' : 'Téléchargements désactivés jusqu’à validation finale des PDF.'}</p></div>}
+    {receipt && <div style={{ marginTop: 16, padding: 16, border: '1px solid #565656', borderRadius: 10 }}><strong>{language === 'en' ? 'Test order receipt' : 'Reçu de commande test'}</strong><p>{receipt.files.join(' · ')}</p><p>{language === 'en' ? 'Your private PDFs are ready for sandbox download testing.' : 'Vos PDF privés sont prêts pour les tests de téléchargement.'}</p>{claimToken && <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>{fileKeys.map(file => <button key={file} type="button" disabled={Boolean(downloading)} onClick={() => download(file)} style={{ padding: 10, border: '1px solid #888', borderRadius: 8, textAlign: 'left', cursor: 'pointer' }}>{downloading === file ? 'Preparing…' : 'Download · ' + fileLabels[file]}</button>)}</div>}{downloadError && <p role="alert">{downloadError}</p>}</div>}
     <button type="button" onClick={onClose} style={{ marginTop: 20, textDecoration: 'underline' }}>{language === 'en' ? 'Close test checkout' : 'Fermer le paiement de test'}</button>
   </section>;
 }
