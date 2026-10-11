@@ -47,7 +47,8 @@ export async function POST(request: Request) {
   if (!signed.ok) return NextResponse.json({ error: 'File temporarily unavailable' }, { status: 502 });
   const data = await signed.json();
   if (typeof data.signedURL !== 'string') return NextResponse.json({ error: 'Invalid storage response' }, { status: 502 });
-  const signedUrl = new URL(data.signedURL, url.replace(/\/$/, '') + '/storage/v1/').toString();
+  const signedPath = data.signedURL.startsWith('/') ? data.signedURL : '/' + data.signedURL;
+  const signedUrl = new URL(signedPath, url).toString();
   if (new URL(signedUrl).origin !== new URL(url).origin) return NextResponse.json({ error: 'Invalid storage URL' }, { status: 502 });
   return NextResponse.json({ url: signedUrl, expiresIn: 60 }, { headers: { 'Cache-Control': 'no-store' } });
 }
