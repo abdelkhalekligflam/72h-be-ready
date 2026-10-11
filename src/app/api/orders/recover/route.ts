@@ -27,7 +27,7 @@ export async function POST(request: Request) {
   // Sandbox: verify the original PayPal payer email, but deliver only to the verified Resend test inbox.
   const generic = NextResponse.json({ message: 'If the order and PayPal payer email match, a test recovery link will be sent to the configured Resend test inbox.' }, { headers: { 'Cache-Control': 'no-store' } });
   const headers = { apikey: key, Authorization: 'Bearer ' + key };
-  const params = new URLSearchParams({ paypal_order_id: 'eq.' + orderId, payer_email: 'eq.' + email, select: 'id,payment_status,recovery_requested_at,fulfillment_status', limit: '1' });
+  const params = new URLSearchParams({ paypal_order_id: 'eq.' + orderId, payer_email: 'eq.' + email, select: 'id,payment_status,recovery_requested_at,fulfillment_status,download_token_hash,download_token_expires_at', limit: '1' });
   const found = await fetch(base.replace(/\/$/, '') + '/rest/v1/digital_orders?' + params, { headers, cache: 'no-store' });
   if (!found.ok) return NextResponse.json({ error: 'Recovery service temporarily unavailable' }, { status: 503 });
   const rows = await found.json();
@@ -53,6 +53,14 @@ export async function POST(request: Request) {
     method: 'POST', headers: { Authorization: 'Bearer ' + mailKey, 'Content-Type': 'application/json' },
     body: JSON.stringify({ from, to: [testEmail], subject: '72H — BE READY | Your secure download link', text: 'Use this link within one hour to retrieve your purchased PDFs:\n' + link.toString() + '\nIf you did not request this, ignore this email.' }), cache: 'no-store'
   });
-  if (!sent.ok) { console.error('Recovery email failed', sent.status); return NextResponse.json({ error: 'Email delivery unavailable. Try again later or contact support.' }, { status: 503 }); }
+  if (!sent.ok) {
+    console.error('Recovery email failed', sent.status);
+    const restore = await fetch(base.replace(/\/$/, '') + '/rest/v1/digital_orders?id=eq.' + encodeURIComponent(order.id) + '&download_token_hash=eq.' + hash, {
+      method: 'PATCH', headers: { ...headers, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({ download_token_hash: order.download_token_hash, download_token_expires_at: order.download_token_expires_at, recovery_requested_at: order.recovery_requested_at }), cache: 'no-store'
+    });
+    if (!restore.ok) console.error('Recovery restoration failed', restore.status);
+    return NextResponse.json({ error: 'Email delivery unavailable. Try again later or contact support.' }, { status: 503 });
+  }
   return generic;
 }
