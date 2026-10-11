@@ -30,16 +30,19 @@ export async function POST(request: Request) {
         originalUnit?.amount?.currency_code !== 'EUR' || originalUnit?.amount?.value !== prices[edition]) {
       return NextResponse.json({ error: 'Order edition or amount mismatch' }, { status: 422 });
     }
+    if (originalOrder.status === 'COMPLETED') return NextResponse.json({ error: 'Order already captured. Contact support with your PayPal order ID.', orderId }, { status: 409 });
+    if (originalOrder.status !== 'APPROVED') return NextResponse.json({ error: 'Order not approved for capture' }, { status: 422 });
     const response = await fetch(base + '/v2/checkout/orders/' + orderId + '/capture', {
       method: 'POST',
-      headers: { Authorization: 'Bearer ' + access_token, 'Content-Type': 'application/json', 'PayPal-Request-Id': crypto.randomUUID() },
+      headers: { Authorization: 'Bearer ' + access_token, 'Content-Type': 'application/json', 'PayPal-Request-Id': 'capture-' + orderId },
       body: '{}', cache: 'no-store'
     });
     const result = await response.json();
     if (!response.ok || result.status !== 'COMPLETED') return NextResponse.json({ error: 'Payment not completed' }, { status: 422 });
+    if (!Array.isArray(result.purchase_units) || result.purchase_units.length !== 1 || !Array.isArray(originalOrder.purchase_units) || originalOrder.purchase_units.length !== 1) return NextResponse.json({ error: 'Unexpected order structure' }, { status: 422 });
     const unit = result.purchase_units?.[0];
     const capture = unit?.payments?.captures?.[0];
-    if (capture?.status !== 'COMPLETED' || capture?.amount?.currency_code !== 'EUR' || !['9.90','16.90'].includes(capture?.amount?.value)) {
+    if (capture?.status !== 'COMPLETED' || capture?.amount?.currency_code !== 'EUR' || capture?.amount?.value !== prices[edition]) {
       return NextResponse.json({ error: 'Payment verification failed' }, { status: 422 });
     }
     const supabaseUrl = process.env.SUPABASE_URL;
