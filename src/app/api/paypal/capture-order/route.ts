@@ -17,6 +17,18 @@ export async function POST(request: Request) {
     });
     if (!auth.ok) return NextResponse.json({ error: 'Authentication failed' }, { status: 502 });
     const { access_token } = await auth.json();
+    const orderResponse = await fetch(base + '/v2/checkout/orders/' + orderId, {
+      headers: { Authorization: 'Bearer ' + access_token }, cache: 'no-store'
+    });
+    if (!orderResponse.ok) return NextResponse.json({ error: 'Unable to verify PayPal order' }, { status: 502 });
+    const originalOrder = await orderResponse.json();
+    const originalUnit = originalOrder.purchase_units?.[0];
+    const prices: Record<string,string> = { en: '9.90', fr: '9.90', bundle: '16.90' };
+    const edition = originalUnit?.custom_id;
+    if (typeof edition !== 'string' || !Object.prototype.hasOwnProperty.call(prices, edition) ||
+        originalUnit?.amount?.currency_code !== 'EUR' || originalUnit?.amount?.value !== prices[edition]) {
+      return NextResponse.json({ error: 'Order edition or amount mismatch' }, { status: 422 });
+    }
     const response = await fetch(base + '/v2/checkout/orders/' + orderId + '/capture', {
       method: 'POST',
       headers: { Authorization: 'Bearer ' + access_token, 'Content-Type': 'application/json', 'PayPal-Request-Id': crypto.randomUUID() },
@@ -26,11 +38,6 @@ export async function POST(request: Request) {
     if (!response.ok || result.status !== 'COMPLETED') return NextResponse.json({ error: 'Payment not completed' }, { status: 422 });
     const unit = result.purchase_units?.[0];
     const capture = unit?.payments?.captures?.[0];
-    const prices: Record<string,string> = { en: '9.90', fr: '9.90', bundle: '16.90' };
-    const edition = unit?.custom_id;
-    if (typeof edition !== 'string' || !Object.prototype.hasOwnProperty.call(prices, edition) || capture?.amount?.value !== prices[edition]) {
-      return NextResponse.json({ error: 'Order edition or amount mismatch' }, { status: 422 });
-    }
     if (capture?.status !== 'COMPLETED' || capture?.amount?.currency_code !== 'EUR' || !['9.90','16.90'].includes(capture?.amount?.value)) {
       return NextResponse.json({ error: 'Payment verification failed' }, { status: 422 });
     }
