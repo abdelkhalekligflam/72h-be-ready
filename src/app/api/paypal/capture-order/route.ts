@@ -1,0 +1,35 @@
+import { NextResponse } from 'next/server';
+
+export const runtime = 'nodejs';
+export async function POST(request: Request) {
+  try {
+    if (process.env.PAYPAL_ENV !== 'sandbox') return NextResponse.json({ error: 'Sandbox only' }, { status: 403 });
+    const id = process.env.PAYPAL_CLIENT_ID;
+    const secret = process.env.PAYPAL_CLIENT_SECRET;
+    if (!id || !secret) return NextResponse.json({ error: 'Sandbox not configured' }, { status: 503 });
+    const body = await request.json();
+    const orderId = body?.orderId;
+    if (typeof orderId !== 'string' || !/^[A-Z0-9]{8,32}$/.test(orderId)) return NextResponse.json({ error: 'Invalid order' }, { status: 400 });
+    const base = 'https://api-m.sandbox.paypal.com';
+    const auth = await fetch(base + '/v1/oauth2/token', {
+      method: 'POST', headers: { Authorization: 'Basic ' + Buffer.from(id + ':' + secret).toString('base64'), 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'grant_type=client_credentials', cache: 'no-store'
+    });
+    if (!auth.ok) return NextResponse.json({ error: 'Authentication failed' }, { status: 502 });
+    const { access_token } = await auth.json();
+    const response = await fetch(base + '/v2/checkout/orders/' + orderId + '/capture', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + access_token, 'Content-Type': 'application/json', 'PayPal-Request-Id': crypto.randomUUID() },
+      body: '{}', cache: 'no-store'
+    });
+    const result = await response.json();
+    if (!response.ok || result.status !== 'COMPLETED') return NextResponse.json({ error: 'Payment not completed' }, { status: 422 });
+    const capture = result.purchase_units?.[0]?.payments?.captures?.[0];
+    if (capture?.status !== 'COMPLETED' || capture?.amount?.currency_code !== 'EUR' || !['9.90','16.90'].includes(capture?.amount?.value)) {
+      return NextResponse.json({ error: 'Payment verification failed' }, { status: 422 });
+    }
+    return NextResponse.json({ status: 'COMPLETED', sandbox: true, note: 'Test payment only. No digital goods are delivered.' });
+  } catch {
+    return NextResponse.json({ error: 'Sandbox capture unavailable' }, { status: 503 });
+  }
+}
