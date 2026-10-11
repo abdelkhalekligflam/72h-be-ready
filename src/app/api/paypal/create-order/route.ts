@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     const response = await fetch(base + '/v2/checkout/orders', {
       method: 'POST',
       headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json', 'PayPal-Request-Id': crypto.randomUUID() },
-      body: JSON.stringify({ intent: 'CAPTURE', purchase_units: [{ description: names[edition], amount: { currency_code: 'EUR', value: prices[edition] } }] }),
+      body: JSON.stringify({ intent: 'CAPTURE', purchase_units: [{ custom_id: edition, description: names[edition], amount: { currency_code: 'EUR', value: prices[edition] } }] }),
       cache: 'no-store'
     });
     const order = await response.json();
