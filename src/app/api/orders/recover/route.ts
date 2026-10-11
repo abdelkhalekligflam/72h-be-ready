@@ -37,11 +37,16 @@ export async function POST(request: Request) {
   const token = randomBytes(32).toString('hex');
   const hash = createHash('sha256').update(token).digest('hex');
   const now = new Date().toISOString();
-  const update = await fetch(base.replace(/\/$/, '') + '/rest/v1/digital_orders?id=eq.' + encodeURIComponent(order.id), {
-    method: 'PATCH', headers: { ...headers, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+  // Atomic conditional update: only one concurrent request may rotate a receipt within the cooldown window.
+  const cutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+  const filter = 'id=eq.' + encodeURIComponent(order.id) + '&or=(recovery_requested_at.is.null,recovery_requested_at.lt.' + encodeURIComponent(cutoff) + ')';
+  const update = await fetch(base.replace(/\/$/, '') + '/rest/v1/digital_orders?' + filter, {
+    method: 'PATCH', headers: { ...headers, 'Content-Type': 'application/json', Prefer: 'return=representation' },
     body: JSON.stringify({ download_token_hash: hash, download_token_expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(), recovery_requested_at: now }), cache: 'no-store'
   });
   if (!update.ok) return NextResponse.json({ error: 'Recovery service temporarily unavailable' }, { status: 503 });
+  const changed = await update.json();
+  if (!Array.isArray(changed) || changed.length !== 1) return generic;
   const link = new URL('/recover', siteUrl.origin);
   link.hash = 'token=' + token;
   const sent = await fetch('https://api.resend.com/emails', {
