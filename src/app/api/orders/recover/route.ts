@@ -24,8 +24,8 @@ export async function POST(request: Request) {
   const email = body?.email;
   if (typeof orderId !== 'string' || !/^[A-Z0-9]{8,32}$/.test(orderId) ||
       typeof email !== 'string' || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return NextResponse.json({ error: 'Invalid order details' }, { status: 400 });
-  if (email.trim().toLowerCase() !== testEmail) return NextResponse.json({ error: 'Sandbox email recovery is limited to the configured test recipient.' }, { status: 403 });
-  const generic = NextResponse.json({ message: 'If the order and email match, a recovery link will be sent.' }, { headers: { 'Cache-Control': 'no-store' } });
+  // Sandbox: verify the original PayPal payer email, but deliver only to the verified Resend test inbox.
+  const generic = NextResponse.json({ message: 'If the order and PayPal payer email match, a test recovery link will be sent to the configured Resend test inbox.' }, { headers: { 'Cache-Control': 'no-store' } });
   const headers = { apikey: key, Authorization: 'Bearer ' + key };
   const params = new URLSearchParams({ paypal_order_id: 'eq.' + orderId, payer_email: 'eq.' + email, select: 'id,payment_status,recovery_requested_at,fulfillment_status', limit: '1' });
   const found = await fetch(base.replace(/\/$/, '') + '/rest/v1/digital_orders?' + params, { headers, cache: 'no-store' });
@@ -46,7 +46,7 @@ export async function POST(request: Request) {
   link.hash = 'token=' + token;
   const sent = await fetch('https://api.resend.com/emails', {
     method: 'POST', headers: { Authorization: 'Bearer ' + mailKey, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from, to: [email], subject: '72H — BE READY | Your secure download link', text: 'Use this link within one hour to retrieve your purchased PDFs:\n' + link.toString() + '\nIf you did not request this, ignore this email.' }), cache: 'no-store'
+    body: JSON.stringify({ from, to: [testEmail], subject: '72H — BE READY | Your secure download link', text: 'Use this link within one hour to retrieve your purchased PDFs:\n' + link.toString() + '\nIf you did not request this, ignore this email.' }), cache: 'no-store'
   });
   if (!sent.ok) { console.error('Recovery email failed', sent.status); return NextResponse.json({ error: 'Email delivery unavailable. Try again later or contact support.' }, { status: 503 }); }
   return generic;
