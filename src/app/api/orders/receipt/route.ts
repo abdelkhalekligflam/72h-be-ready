@@ -18,6 +18,8 @@ export async function POST(request: Request) {
   const order = rows?.[0];
   if (!order || !order.download_token_expires_at || new Date(order.download_token_expires_at).getTime() <= Date.now()) return NextResponse.json({ error: 'Receipt expired or not found' }, { status: 404 });
   if (order.payment_status !== 'COMPLETED') return NextResponse.json({ error: 'Payment not verified' }, { status: 403 });
+  if (!['en', 'fr', 'bundle'].includes(order.edition)) return NextResponse.json({ error: 'Invalid purchased edition' }, { status: 422 });
+  if (order.fulfillment_status === 'REVOKED') return NextResponse.json({ error: 'Delivery unavailable. Contact support.' }, { status: 403 });
   const files = order.edition === 'bundle' ? ['English handbook','English workbook','French handbook','French workbook'] : order.edition === 'en' ? ['English handbook','English workbook'] : ['French handbook','French workbook'];
   return NextResponse.json({ edition: order.edition, amount: order.amount_eur, currency: order.currency, status: order.payment_status, files, downloadsEnabled: order.fulfillment_status !== 'REVOKED', note: 'Sandbox test receipt. Private PDF downloads are available while the receipt token is valid.' }, { headers: { 'Cache-Control': 'no-store' } });
 }
