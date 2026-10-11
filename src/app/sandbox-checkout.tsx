@@ -49,7 +49,7 @@ export default function SandboxCheckout({ edition, language, onClose }: { editio
               if (receiptResponse.ok && active) setReceipt(await receiptResponse.json());
             }
             if (active) setMessage(response.ok && result.status === 'COMPLETED'
-              ? (language === 'en' ? 'Sandbox payment successful. No real money charged and no files delivered.' : 'Paiement Sandbox réussi. Aucun débit réel et aucun fichier livré.')
+              ? (language === 'en' ? 'Sandbox payment successful. No real money charged. Test PDF downloads are available below.' : 'Paiement Sandbox réussi. Aucun débit réel. Les PDF de test sont disponibles ci-dessous.')
               : (result.error || 'Payment verification failed'));
           },
           onError: () => { if (active) setMessage('PayPal Sandbox test failed. Please try again.'); },
@@ -100,7 +100,7 @@ export default function SandboxCheckout({ edition, language, onClose }: { editio
     <p style={{ marginBottom: 18 }}>{language === 'en' ? 'TEST MODE ONLY — No real charges. Free workbook included. Sandbox download test only; no real charges.' : 'MODE TEST UNIQUEMENT — Aucun débit réel. Carnet bonus inclus. Téléchargement de test uniquement, aucun débit réel.'}</p>
     {status === 'loading' && <p>Loading PayPal Sandbox…</p>}
     <div ref={container} />
-    {message && <p role="status" style={{ marginTop: 14 }}>{message}</p>}
+    {message && <p role="status" style={{ marginTop: 14 }}>{message}</p>}{message && /already captured|already recorded|recording needs support/i.test(message) && <p><a href="/recover" style={{color:'#ff625b',textDecoration:'underline'}}>Recover downloads / Récupérer les PDF</a> · <a href="mailto:akhaelk@gmail.com" style={{color:'#ff625b'}}>Support</a></p>}
     {receipt && <div style={{ marginTop: 16, padding: 16, border: '1px solid #565656', borderRadius: 10 }}><strong>{language === 'en' ? 'Test order receipt' : 'Reçu de commande test'}</strong><p>{receipt.files.join(' · ')}</p><p>{language === 'en' ? 'Your private PDFs are ready for sandbox download testing.' : 'Vos PDF privés sont prêts pour les tests de téléchargement.'}</p>{claimToken && <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>{fileKeys.map(file => <button key={file} type="button" disabled={Boolean(downloading)} onClick={() => download(file)} style={{ padding: 10, border: '1px solid #888', borderRadius: 8, textAlign: 'left', cursor: 'pointer' }}>{downloading === file ? 'Preparing…' : 'Download · ' + fileLabels[file]}</button>)}</div>}{downloadError && <p role="alert">{downloadError}</p>}</div>}
     <button type="button" onClick={onClose} style={{ marginTop: 20, textDecoration: 'underline' }}>{language === 'en' ? 'Close test checkout' : 'Fermer le paiement de test'}</button>
   </section>;
