@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
 export async function GET() {
-  const configured = process.env.PAYPAL_ENV === 'sandbox' && Boolean(process.env.RESEND_API_KEY && process.env.RECOVERY_FROM_EMAIL && process.env.RECOVERY_BASE_URL && process.env.SUPABASE_URL && process.env.SUPABASE_SECRET_KEY);
+  const configured = process.env.PAYPAL_ENV === 'sandbox' && Boolean(process.env.RESEND_API_KEY && process.env.RECOVERY_FROM_EMAIL && process.env.RECOVERY_BASE_URL && process.env.RECOVERY_TEST_EMAIL && process.env.SUPABASE_URL && process.env.SUPABASE_SECRET_KEY);
   return NextResponse.json({ available: configured }, { headers: { 'Cache-Control': 'no-store' } });
 }
 
@@ -14,7 +14,8 @@ export async function POST(request: Request) {
   const mailKey = process.env.RESEND_API_KEY;
   const from = process.env.RECOVERY_FROM_EMAIL;
   const site = process.env.RECOVERY_BASE_URL;
-  if (!base || !key || !mailKey || !from || !site) return NextResponse.json({ error: 'Email recovery is not configured yet' }, { status: 503 });
+  const testEmail = process.env.RECOVERY_TEST_EMAIL?.trim().toLowerCase();
+  if (!base || !key || !mailKey || !from || !site || !testEmail) return NextResponse.json({ error: 'Email recovery is not configured yet' }, { status: 503 });
   let siteUrl: URL;
   try { siteUrl = new URL(site); if (siteUrl.protocol !== 'https:' || siteUrl.username || siteUrl.password) throw new Error('invalid'); }
   catch { return NextResponse.json({ error: 'Recovery URL configuration invalid' }, { status: 503 }); }
@@ -23,6 +24,7 @@ export async function POST(request: Request) {
   const email = body?.email;
   if (typeof orderId !== 'string' || !/^[A-Z0-9]{8,32}$/.test(orderId) ||
       typeof email !== 'string' || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return NextResponse.json({ error: 'Invalid order details' }, { status: 400 });
+  if (email.trim().toLowerCase() !== testEmail) return NextResponse.json({ error: 'Sandbox email recovery is limited to the configured test recipient.' }, { status: 403 });
   const generic = NextResponse.json({ message: 'If the order and email match, a recovery link will be sent.' }, { headers: { 'Cache-Control': 'no-store' } });
   const headers = { apikey: key, Authorization: 'Bearer ' + key };
   const params = new URLSearchParams({ paypal_order_id: 'eq.' + orderId, payer_email: 'eq.' + email, select: 'id,payment_status,recovery_requested_at,fulfillment_status', limit: '1' });
