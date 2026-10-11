@@ -31,7 +31,7 @@ export async function POST(request: Request) {
         originalUnit?.amount?.currency_code !== 'EUR' || originalUnit?.amount?.value !== prices[edition]) {
       return NextResponse.json({ error: 'Order edition or amount mismatch' }, { status: 422 });
     }
-    if (originalOrder.status === 'COMPLETED') return NextResponse.json({ error: 'Order already captured. Contact support with your PayPal order ID.', orderId }, { status: 409 });
+    if (originalOrder.status === 'COMPLETED') return NextResponse.json({ error: 'Order already captured. Use the recovery page to retrieve your downloads, or contact support with your PayPal order ID.', orderId }, { status: 409 });
     if (originalOrder.status !== 'APPROVED') return NextResponse.json({ error: 'Order not approved for capture' }, { status: 422 });
     const response = await fetch(base + '/v2/checkout/orders/' + orderId + '/capture', {
       method: 'POST',
