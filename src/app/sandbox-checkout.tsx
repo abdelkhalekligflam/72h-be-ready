@@ -20,7 +20,6 @@ export default function SandboxCheckout({ edition, language, onClose }: { editio
     let active = true;
     let buttons: ReturnType<PayPalSDK['Buttons']> | undefined;
     const script = document.createElement('script');
-    script.src = '/api/paypal/client-script';
     script.async = true;
     script.onload = async () => {
       if (!active) return;
@@ -54,7 +53,15 @@ export default function SandboxCheckout({ edition, language, onClose }: { editio
       }
     };
     script.onerror = () => { if (active) { setStatus('error'); setMessage('PayPal SDK script failed to load. Check the browser console/network and Preview configuration.'); } };
-    document.body.appendChild(script);
+    fetch('/api/paypal/config', { cache: 'no-store' })
+      .then(async response => { if (!response.ok) throw new Error('Sandbox config unavailable (' + response.status + ')'); return response.json(); })
+      .then(({ clientId }) => {
+        if (!active) return;
+        if (typeof clientId !== 'string' || !clientId.trim()) throw new Error('Missing PayPal client ID');
+        script.src = 'https://www.paypal.com/sdk/js?client-id=' + encodeURIComponent(clientId.trim()) + '&currency=EUR&intent=capture&components=buttons';
+        document.body.appendChild(script);
+      })
+      .catch(error => { if (active) { setStatus('error'); setMessage('PayPal configuration error: ' + (error instanceof Error ? error.message : String(error))); } });
     return () => {
       active = false;
       try { buttons?.close?.(); } catch { /* SDK cleanup */ }
