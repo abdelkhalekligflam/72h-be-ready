@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
 export async function GET() {
-  const configured = process.env.PAYPAL_ENV === 'sandbox' && Boolean(process.env.RESEND_API_KEY && process.env.RECOVERY_FROM_EMAIL && process.env.RECOVERY_BASE_URL && process.env.RECOVERY_TEST_EMAIL && process.env.SUPABASE_URL && process.env.SUPABASE_SECRET_KEY);
+  const configured = process.env.PAYPAL_ENV === 'sandbox' && Boolean(process.env.RESEND_API_KEY && process.env.RECOVERY_FROM_EMAIL && process.env.RECOVERY_TEST_EMAIL && process.env.SUPABASE_URL && process.env.SUPABASE_SECRET_KEY);
   return NextResponse.json({ available: configured }, { headers: { 'Cache-Control': 'no-store' } });
 }
 
@@ -13,11 +13,11 @@ export async function POST(request: Request) {
   const key = process.env.SUPABASE_SECRET_KEY;
   const mailKey = process.env.RESEND_API_KEY;
   const from = process.env.RECOVERY_FROM_EMAIL;
-  const site = process.env.RECOVERY_BASE_URL;
+  const site = process.env.RECOVERY_BASE_URL || (process.env.VERCEL_URL ? 'https://' + process.env.VERCEL_URL : '');
   const testEmail = process.env.RECOVERY_TEST_EMAIL?.trim().toLowerCase();
   if (!base || !key || !mailKey || !from || !site || !testEmail) return NextResponse.json({ error: 'Email recovery is not configured yet' }, { status: 503 });
   let siteUrl: URL;
-  try { siteUrl = new URL(site); if (siteUrl.protocol !== 'https:' || siteUrl.username || siteUrl.password) throw new Error('invalid'); }
+  try { siteUrl = new URL(site); if (siteUrl.protocol !== 'https:' || siteUrl.username || siteUrl.password || (process.env.VERCEL_URL && siteUrl.hostname !== process.env.VERCEL_URL)) throw new Error('invalid'); }
   catch { return NextResponse.json({ error: 'Recovery URL configuration invalid' }, { status: 503 }); }
   const body = await request.json().catch(() => null);
   const orderId = body?.orderId;
