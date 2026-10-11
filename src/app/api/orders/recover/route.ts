@@ -49,17 +49,19 @@ export async function POST(request: Request) {
   if (!Array.isArray(changed) || changed.length !== 1) return generic;
   const link = new URL('/recover', siteUrl.origin);
   link.hash = 'token=' + token;
-  const sent = await fetch('https://api.resend.com/emails', {
+  let sent: Response | null = null;
+  try { sent = await fetch('https://api.resend.com/emails', {
     method: 'POST', headers: { Authorization: 'Bearer ' + mailKey, 'Content-Type': 'application/json' },
     body: JSON.stringify({ from, to: [testEmail], subject: '72H — BE READY | Your secure download link', text: 'Use this link within one hour to retrieve your purchased PDFs:\n' + link.toString() + '\nIf you did not request this, ignore this email.' }), cache: 'no-store'
   });
-  if (!sent.ok) {
-    console.error('Recovery email failed', sent.status);
+  } catch { console.error('Recovery email transport failed'); }
+  if (!sent?.ok) {
+    console.error('Recovery email unavailable', sent?.status ?? 'network');
     const restore = await fetch(base.replace(/\/$/, '') + '/rest/v1/digital_orders?id=eq.' + encodeURIComponent(order.id) + '&download_token_hash=eq.' + hash, {
       method: 'PATCH', headers: { ...headers, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
       body: JSON.stringify({ download_token_hash: order.download_token_hash, download_token_expires_at: order.download_token_expires_at, recovery_requested_at: order.recovery_requested_at }), cache: 'no-store'
-    });
-    if (!restore.ok) console.error('Recovery restoration failed', restore.status);
+    }).catch(() => null);
+    if (!restore?.ok) console.error('Recovery restoration failed', restore?.status ?? 'network');
     return NextResponse.json({ error: 'Email delivery unavailable. Try again later or contact support.' }, { status: 503 });
   }
   return generic;
