@@ -97,7 +97,7 @@ export default function SandboxCheckout({ edition, language, onClose }: { editio
   const fileLabels: Record<string,string> = { handbook_en: 'English handbook', workbook_en: 'English workbook', handbook_fr: 'French handbook', workbook_fr: 'French workbook' };
   return <section style={{ maxWidth: 580, margin: '30px auto', padding: 26, border: '1px solid #565656', borderRadius: 16 }} aria-label="PayPal Sandbox checkout">
     <p style={{ fontWeight: 700, marginBottom: 12 }}>PAYPAL SANDBOX · {edition.toUpperCase()}</p>
-    <p style={{ marginBottom: 18 }}>{language === 'en' ? 'TEST MODE ONLY — No real charges. Free workbook included with the final edition, not delivered in tests.' : 'MODE TEST UNIQUEMENT — Aucun débit réel. Carnet bonus inclus dans la future édition, non livré pendant les tests.'}</p>
+    <p style={{ marginBottom: 18 }}>{language === 'en' ? 'TEST MODE ONLY — No real charges. Free workbook included. Sandbox download test only; no real charges.' : 'MODE TEST UNIQUEMENT — Aucun débit réel. Carnet bonus inclus. Téléchargement de test uniquement, aucun débit réel.'}</p>
     {status === 'loading' && <p>Loading PayPal Sandbox…</p>}
     <div ref={container} />
     {message && <p role="status" style={{ marginTop: 14 }}>{message}</p>}
