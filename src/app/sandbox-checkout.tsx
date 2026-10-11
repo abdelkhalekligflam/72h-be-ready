@@ -14,6 +14,7 @@ declare global { interface Window { paypal?: PayPalSDK } }
 export default function SandboxCheckout({ edition, language, onClose }: { edition: Edition; language: 'en' | 'fr'; onClose: () => void }) {
   const container = useRef<HTMLDivElement>(null);
   const [message, setMessage] = useState('');
+  const [receipt, setReceipt] = useState<{ edition: string; files: string[]; downloadsEnabled: boolean } | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
 
   useEffect(() => {
@@ -39,6 +40,10 @@ export default function SandboxCheckout({ edition, language, onClose }: { editio
               method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: orderID })
             });
             const result = await response.json();
+            if (response.ok && result.status === 'COMPLETED' && result.claimToken) {
+              const receiptResponse = await fetch('/api/orders/receipt', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: result.claimToken }) });
+              if (receiptResponse.ok && active) setReceipt(await receiptResponse.json());
+            }
             if (active) setMessage(response.ok && result.status === 'COMPLETED'
               ? (language === 'en' ? 'Sandbox payment successful. No real money charged and no files delivered.' : 'Paiement Sandbox réussi. Aucun débit réel et aucun fichier livré.')
               : (result.error || 'Payment verification failed'));
@@ -75,6 +80,7 @@ export default function SandboxCheckout({ edition, language, onClose }: { editio
     {status === 'loading' && <p>Loading PayPal Sandbox…</p>}
     <div ref={container} />
     {message && <p role="status" style={{ marginTop: 14 }}>{message}</p>}
+    {receipt && <div style={{ marginTop: 16, padding: 16, border: '1px solid #565656', borderRadius: 10 }}><strong>{language === 'en' ? 'Test order receipt' : 'Reçu de commande test'}</strong><p>{receipt.files.join(' · ')}</p><p>{language === 'en' ? 'Downloads are disabled until final PDF review.' : 'Téléchargements désactivés jusqu’à validation finale des PDF.'}</p></div>}
     <button type="button" onClick={onClose} style={{ marginTop: 20, textDecoration: 'underline' }}>{language === 'en' ? 'Close test checkout' : 'Fermer le paiement de test'}</button>
   </section>;
 }
