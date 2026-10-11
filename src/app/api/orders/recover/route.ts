@@ -39,7 +39,7 @@ export async function POST(request: Request) {
   const now = new Date().toISOString();
   // Atomic conditional update: only one concurrent request may rotate a receipt within the cooldown window.
   const cutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString();
-  const filter = 'id=eq.' + encodeURIComponent(order.id) + '&or=(recovery_requested_at.is.null,recovery_requested_at.lt.' + encodeURIComponent(cutoff) + ')';
+  const filter = 'id=eq.' + encodeURIComponent(order.id) + '&payment_status=eq.COMPLETED&fulfillment_status=neq.REVOKED&or=(recovery_requested_at.is.null,recovery_requested_at.lt.' + encodeURIComponent(cutoff) + ')';
   const update = await fetch(base.replace(/\/$/, '') + '/rest/v1/digital_orders?' + filter, {
     method: 'PATCH', headers: { ...headers, 'Content-Type': 'application/json', Prefer: 'return=representation' },
     body: JSON.stringify({ download_token_hash: hash, download_token_expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(), recovery_requested_at: now }), cache: 'no-store'
