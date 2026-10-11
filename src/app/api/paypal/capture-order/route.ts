@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     const captureId = capture?.id;
     if (typeof captureId !== 'string' || !captureId) return NextResponse.json({ error: 'Missing capture reference' }, { status: 422 });
     const payerEmail = typeof result.payer?.email_address === 'string' ? result.payer.email_address : null;
-    const save = await fetch(supabaseUrl.replace(/\\/$/, '') + '/rest/v1/digital_orders?on_conflict=paypal_order_id', {
+    const save = await fetch(supabaseUrl.replace(/\/$/, '') + '/rest/v1/digital_orders?on_conflict=paypal_order_id', {
       method: 'POST',
       headers: {
         apikey: supabaseKey,
