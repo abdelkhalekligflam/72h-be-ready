@@ -23,7 +23,8 @@ export default function SandboxCheckout({ edition, language, onClose }: { editio
     script.src = '/api/paypal/client-script';
     script.async = true;
     script.onload = async () => {
-      if (!active || !window.paypal || !container.current) return;
+      if (!active) return;
+      if (!window.paypal || !container.current) { setStatus('error'); setMessage('PayPal SDK loaded without Buttons. Check browser extensions or PayPal SDK response.'); return; }
       try {
         buttons = window.paypal.Buttons({
           createOrder: async () => {
@@ -48,11 +49,11 @@ export default function SandboxCheckout({ edition, language, onClose }: { editio
         });
         await buttons.render(container.current);
         if (active) setStatus('ready');
-      } catch {
-        if (active) { setStatus('error'); setMessage('Unable to initialize PayPal Sandbox. Check Preview environment variables.'); }
+      } catch (error) {
+        if (active) { setStatus('error'); setMessage('PayPal SDK render failed: ' + (error instanceof Error ? error.message : String(error))); }
       }
     };
-    script.onerror = () => { if (active) { setStatus('error'); setMessage('PayPal Sandbox is not configured in this deployment.'); } };
+    script.onerror = () => { if (active) { setStatus('error'); setMessage('PayPal SDK script failed to load. Check the browser console/network and Preview configuration.'); } };
     document.body.appendChild(script);
     return () => {
       active = false;
